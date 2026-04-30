@@ -48,7 +48,7 @@ class ScheduleConfig(BaseModel):
 
 
 class StorageConfig(BaseModel):
-    table: str  # database table name
+    table_name: str  # database table name
     upsert_key: Optional[str] = None  # column name to use for upsert, if any
 
 
