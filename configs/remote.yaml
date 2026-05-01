@@ -1,0 +1,24 @@
+#  Example configuration for fetching remote jobs from RemoteOK API
+name: remoteok_jobs
+
+url: https://remoteok.com/api
+method: GET
+
+auth:
+  type: none
+
+pagination:
+  type: none
+
+results_path: ""
+
+schedule:
+  interval_minutes: 1440
+
+storage:
+  table_name: jobs
+  upsert_key: id
+
+transform:
+  exclude: []
+  rename: {}
