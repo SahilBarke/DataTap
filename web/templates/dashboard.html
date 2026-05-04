@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% block title %}DataTap — Dashboard{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <div class="page-title">Dashboard</div>
+    <div class="page-subtitle">{{ total_sources }} active source{% if total_sources != 1 %}s{% endif %} · all pipeline statuses</div>
+  </div>
+  <a href="/add" class="btn btn-primary">+ Add Source</a>
+</div>
+
+<div class="stats-row">
+  <div class="stat-box">
+    <div class="stat-label">Sources</div>
+    <div class="stat-value accent">{{ total_sources }}</div>
+  </div>
+  <div class="stat-box">
+    <div class="stat-label">Total Rows Collected</div>
+    <div class="stat-value">{{ sources | sum(attribute='row_count') }}</div>
+  </div>
+  <div class="stat-box">
+    <div class="stat-label">Total Runs</div>
+    <div class="stat-value">{{ sources | sum(attribute='run_count') }}</div>
+  </div>
+</div>
+
+{% if sources %}
+<div class="card">
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Source</th>
+        <th>Table</th>
+        <th>Status</th>
+        <th>Rows</th>
+        <th>Last Run</th>
+        <th>Schedule</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for s in sources %}
+      <tr>
+        <td>
+          <a href="/source/{{ s.name }}" style="color: var(--accent); text-decoration: none; font-weight: 600;">
+            {{ s.name }}
+          </a>
+        </td>
+        <td><code>{{ s.table_name }}</code></td>
+        <td>
+          {% if s.last_run is none %}
+            <span class="badge badge-muted">Never run</span>
+          {% elif s.last_success %}
+            <span class="badge badge-green">✓ OK</span>
+          {% else %}
+            <span class="badge badge-red">✗ Error</span>
+          {% endif %}
+        </td>
+        <td style="font-weight: 600; color: var(--accent);">{{ s.row_count }}</td>
+        <td style="color: var(--muted);">
+          {% if s.last_run %}
+            {{ s.last_run.strftime('%Y-%m-%d %H:%M') }} UTC
+          {% else %}
+            —
+          {% endif %}
+        </td>
+        <td style="color: var(--muted);">every {{ s.interval_mins }}m</td>
+        <td>
+          <div style="display: flex; gap: 8px; align-items: center;">
+            <button class="btn btn-ghost" onclick="runNow('{{ s.name }}', this)">▶ Run</button>
+            <a href="/api/export/{{ s.name }}" class="btn btn-ghost">↓ CSV</a>
+            <a href="/source/{{ s.name }}" class="btn btn-ghost">→ View</a>
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% else %}
+<div class="card">
+  <div class="empty-state">
+    <div class="icon">⬡</div>
+    <div style="font-family: var(--display); font-size: 18px; font-weight: 700; margin-bottom: 8px;">No sources yet</div>
+    <div style="color: var(--muted); margin-bottom: 20px;">Drop a YAML config in <code>configs/</code> or add one via the UI.</div>
+    <a href="/add" class="btn btn-primary">+ Add your first source</a>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function runNow(name, btn) {
+  const orig = btn.innerHTML;
+  btn.innerHTML = '<span class="spinner"></span>';
+  btn.disabled = true;
+  try {
+    const res = await fetch(`/api/run/${name}`, { method: 'POST' });
+    const data = await res.json();
+    if (data.success) {
+      toast(`✓ ${name}: ${data.records_written} rows written in ${data.duration_s.toFixed(1)}s`);
+      setTimeout(() => location.reload(), 1200);
+    } else {
+      toast(`✗ ${name}: ${data.error}`, 'error');
+    }
+  } catch(e) {
+    toast('Network error', 'error');
+  }
+  btn.innerHTML = orig;
+  btn.disabled = false;
+}
+</script>
+{% endblock %}
