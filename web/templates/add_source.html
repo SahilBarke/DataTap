@@ -1,0 +1,224 @@
+{% extends "base.html" %} {% block title %}DataTap — Add Source{% endblock %} {%
+block content %}
+<div class="page-header">
+  <div>
+    <div class="page-title">Add Source</div>
+    <div class="page-subtitle">
+      Paste a YAML config to register a new API data source
+    </div>
+  </div>
+</div>
+
+<div
+  style="
+    display: grid;
+    grid-template-columns: 1fr 340px;
+    gap: 20px;
+    align-items: start;
+  "
+>
+  <!-- YAML Editor -->
+  <div class="card">
+    <div class="card-title">YAML Config</div>
+    <div
+      id="error-box"
+      style="
+        display: none;
+        background: var(--red) 10;
+        border: 1px solid var(--red) 40;
+        border-radius: 4px;
+        padding: 10px 14px;
+        color: var(--red);
+        font-size: 12px;
+        margin-bottom: 16px;
+      "
+    ></div>
+    <div
+      id="success-box"
+      style="
+        display: none;
+        background: var(--accent) 10;
+        border: 1px solid var(--accent) 40;
+        border-radius: 4px;
+        padding: 10px 14px;
+        color: var(--accent);
+        font-size: 12px;
+        margin-bottom: 16px;
+      "
+    ></div>
+    <textarea
+      id="yaml-input"
+      rows="28"
+      placeholder="Paste your YAML config here..."
+    >
+name: my_source
+url: https://api.example.com/data
+method: GET
+auth:
+  type: none
+pagination:
+  type: none
+  results_path: "."
+schedule:
+  interval_mins: 60
+storage:
+  table_name: my_table
+  upsert_key: id
+transform:
+  rename: {}
+  exclude: []
+</textarea
+    >
+    <div style="margin-top: 14px; display: flex; gap: 10px">
+      <button class="btn btn-primary" onclick="submitConfig()">
+        Save Source
+      </button>
+      <button class="btn btn-ghost" onclick="loadExample('pokemon')">
+        Load Pokemon Example
+      </button>
+      <button class="btn btn-ghost" onclick="loadExample('posts')">
+        Load Posts Example
+      </button>
+    </div>
+  </div>
+
+  <!-- Reference panel -->
+  <div style="display: flex; flex-direction: column; gap: 16px">
+    <div class="card">
+      <div class="card-title">Auth Types</div>
+      <div
+        style="
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+          font-size: 12px;
+          color: var(--muted);
+        "
+      >
+        <div><code>none</code> — no auth</div>
+        <div><code>bearer</code> — Authorization: Bearer &lt;token&gt;</div>
+        <div><code>api_key</code> — custom header with key</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Pagination Types</div>
+      <div
+        style="
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+          font-size: 12px;
+          color: var(--muted);
+        "
+      >
+        <div><code>none</code> — single request</div>
+        <div><code>offset</code> — limit + offset params</div>
+        <div><code>page</code> — page number param</div>
+        <div><code>cursor</code> — next cursor in response</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">results_path</div>
+      <div style="font-size: 12px; color: var(--muted); line-height: 1.8">
+        Dot-notation path to the list in the response.<br /><br />
+        <code>"results"</code> → <code>response.results</code><br />
+        <code>"data.items"</code> → <code>response.data.items</code><br />
+        <code>"."</code> → whole response is the list
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Transform</div>
+      <div style="font-size: 12px; color: var(--muted); line-height: 1.8">
+        <code>rename</code>: map old → new column names<br />
+        <code>exclude</code>: list of columns to drop<br />
+        <code>include</code>: only keep these columns
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %} {% block scripts %}
+<script>
+  const examples = {
+    pokemon: `name: pokemon
+url: https://pokeapi.co/api/v2/pokemon
+method: GET
+auth:
+  type: none
+pagination:
+  type: offset
+  results_path: results
+  limit_param: limit
+  offset_param: offset
+  limit: 20
+  max_pages: 3
+schedule:
+  interval_mins: 1440
+storage:
+  table_name: pokemon
+  upsert_key: name
+transform:
+  rename: {}
+  exclude: []`,
+    posts: `name: posts
+url: https://jsonplaceholder.typicode.com/posts
+method: GET
+auth:
+  type: none
+pagination:
+  type: none
+  results_path: "."
+schedule:
+  interval_mins: 60
+storage:
+  table_name: posts
+  upsert_key: id
+transform:
+  rename:
+    userId: user_id
+  exclude: []`,
+  };
+
+  function loadExample(name) {
+    document.getElementById("yaml-input").value = examples[name];
+  }
+
+  async function submitConfig() {
+    const yaml = document.getElementById("yaml-input").value.trim();
+    const errBox = document.getElementById("error-box");
+    const okBox = document.getElementById("success-box");
+    errBox.style.display = "none";
+    okBox.style.display = "none";
+
+    if (!yaml) {
+      errBox.textContent = "Config cannot be empty";
+      errBox.style.display = "block";
+      return;
+    }
+
+    const form = new FormData();
+    form.append("yaml_content", yaml);
+
+    try {
+      const res = await fetch("/api/add-source", {
+        method: "POST",
+        body: form,
+      });
+      const data = await res.json();
+      if (res.ok) {
+        okBox.textContent = `✓ ${data.message}`;
+        okBox.style.display = "block";
+        setTimeout(() => (window.location.href = "/"), 1500);
+      } else {
+        errBox.textContent = `✗ ${data.detail}`;
+        errBox.style.display = "block";
+      }
+    } catch (e) {
+      errBox.textContent = "Network error";
+      errBox.style.display = "block";
+    }
+  }
+</script>
+{% endblock %}
