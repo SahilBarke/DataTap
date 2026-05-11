@@ -188,3 +188,9 @@ df = pd.read_csv("pokemon.csv")
 - **Pydantic** — config validation
 - **PyYAML** — YAML parsing
 - **Jinja2** — HTML templating
+
+---
+
+## Web UI Demo
+
+https://github.com/user-attachments/assets/1d473e44-24d4-4479-b912-33eb56fc823c
