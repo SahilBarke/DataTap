@@ -261,6 +261,35 @@ async def get_logs(name: str):
     ]
 
 
+@app.get("/api/source/{name}/yaml")
+async def get_yaml(name: str):
+    """Return the raw YAML content of the source config."""
+    config_path = CONFIGS_DIR / f"{name}.yaml"
+    if not config_path.exists():
+        raise HTTPException(404, "Source not found")
+    return {"name": name, "yaml": config_path.read_text()}
+
+
+@app.put("/api/source/{name}/yaml")
+async def update_yaml(name: str, yaml_content: str = Form(...)):
+    """Update and overwrite an existing  source config with new YAML Content, then re-register the source and scheduler job."""
+    config_path = CONFIGS_DIR / f"{name}.yaml"
+    if not config_path.exists():
+        raise HTTPException(404, "Source not found")
+    try:
+        raw = yaml.safe_load(yaml_content)
+        cfg = SourceConfig(**raw)
+    except Exception as e:
+        raise HTTPException(400, f"Invalid config: {e}")
+    if cfg.name != name:
+        raise HTTPException(
+            400, f"Config name '{cfg.name}' must match source name '{name}'"
+        )
+    config_path.write_text(yaml_content)
+    register_source(cfg, _engine())
+    return {"message": f"Source '{name}' updated successfully and scheduler refreshed"}
+
+
 @app.delete("/api/source/{name}")
 async def delete_source(name: str):
     config_path = CONFIGS_DIR / f"{name}.yaml"

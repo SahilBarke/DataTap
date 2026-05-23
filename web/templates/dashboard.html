@@ -1,11 +1,12 @@
-{% extends "base.html" %}
-{% block title %}DataTap — Dashboard{% endblock %}
-
-{% block content %}
+{% extends "base.html" %} {% block title %}DataTap — Dashboard{% endblock %} {%
+block content %}
 <div class="page-header">
   <div>
     <div class="page-title">Dashboard</div>
-    <div class="page-subtitle">{{ total_sources }} active source{% if total_sources != 1 %}s{% endif %} · all pipeline statuses</div>
+    <div class="page-subtitle">
+      {{ total_sources }} active source{% if total_sources != 1 %}s{% endif %} ·
+      all pipeline statuses
+    </div>
   </div>
   <a href="/add" class="btn btn-primary">+ Add Source</a>
 </div>
@@ -43,34 +44,57 @@
       {% for s in sources %}
       <tr>
         <td>
-          <a href="/source/{{ s.name }}" style="color: var(--accent); text-decoration: none; font-weight: 600;">
+          <a
+            href="/source/{{ s.name }}"
+            style="
+              color: var(--accent);
+              text-decoration: none;
+              font-weight: 600;
+            "
+          >
             {{ s.name }}
           </a>
         </td>
         <td><code>{{ s.table_name }}</code></td>
         <td>
           {% if s.last_run is none %}
-            <span class="badge badge-muted">Never run</span>
+          <span class="badge badge-muted">Never run</span>
           {% elif s.last_success %}
-            <span class="badge badge-green">✓ OK</span>
+          <span class="badge badge-green">✓ OK</span>
           {% else %}
-            <span class="badge badge-red">✗ Error</span>
+          <span class="badge badge-red">✗ Error</span>
           {% endif %}
         </td>
-        <td style="font-weight: 600; color: var(--accent);">{{ s.row_count }}</td>
-        <td style="color: var(--muted);">
-          {% if s.last_run %}
-            {{ s.last_run.strftime('%Y-%m-%d %H:%M') }} UTC
-          {% else %}
-            —
-          {% endif %}
+        <td style="font-weight: 600; color: var(--accent)">
+          {{ s.row_count }}
         </td>
-        <td style="color: var(--muted);">every {{ s.interval_mins }}m</td>
+        <td style="color: var(--muted)">
+          {% if s.last_run %} {{ s.last_run.strftime('%Y-%m-%d %H:%M') }} UTC {%
+          else %} — {% endif %}
+        </td>
+        <td style="color: var(--muted)">every {{ s.interval_mins }}m</td>
         <td>
-          <div style="display: flex; gap: 8px; align-items: center;">
-            <button class="btn btn-ghost" onclick="runNow('{{ s.name }}', this)">▶ Run</button>
+          <div style="display: flex; gap: 8px; align-items: center">
+            <button
+              class="btn btn-ghost"
+              onclick="runNow('{{ s.name }}', this)"
+            >
+              ▶ Run
+            </button>
             <a href="/api/export/{{ s.name }}" class="btn btn-ghost">↓ CSV</a>
             <a href="/source/{{ s.name }}" class="btn btn-ghost">→ View</a>
+            <button class="btn btn-ghost" onclick="viewYaml('{{ s.name }}')">
+              ⊙ YAML
+            </button>
+            <button class="btn btn-ghost" onclick="editYaml('{{ s.name }}')">
+              ✎ Edit
+            </button>
+            <button
+              class="btn btn-danger"
+              onclick="confirmDelete('{{ s.name }}')"
+            >
+              ✕ Delete
+            </button>
           </div>
         </td>
       </tr>
@@ -83,34 +107,358 @@
 <div class="card">
   <div class="empty-state">
     <div class="icon">⬡</div>
-    <div style="font-family: var(--display); font-size: 18px; font-weight: 700; margin-bottom: 8px;">No sources yet</div>
-    <div style="color: var(--muted); margin-bottom: 20px;">Drop a YAML config in <code>configs/</code> or add one via the UI.</div>
+    <div
+      style="
+        font-family: var(--display);
+        font-size: 18px;
+        font-weight: 700;
+        margin-bottom: 8px;
+      "
+    >
+      No sources yet
+    </div>
+    <div style="color: var(--muted); margin-bottom: 20px">
+      Drop a YAML config in <code>configs/</code> or add one via the UI.
+    </div>
     <a href="/add" class="btn btn-primary">+ Add your first source</a>
   </div>
 </div>
-{% endif %}
-{% endblock %}
-
-{% block scripts %}
+{% endif %} {% endblock %} {% block scripts %}
 <script>
-async function runNow(name, btn) {
-  const orig = btn.innerHTML;
-  btn.innerHTML = '<span class="spinner"></span>';
-  btn.disabled = true;
-  try {
-    const res = await fetch(`/api/run/${name}`, { method: 'POST' });
-    const data = await res.json();
-    if (data.success) {
-      toast(`✓ ${name}: ${data.records_written} rows written in ${data.duration_s.toFixed(1)}s`);
-      setTimeout(() => location.reload(), 1200);
-    } else {
-      toast(`✗ ${name}: ${data.error}`, 'error');
+  async function runNow(name, btn) {
+    const orig = btn.innerHTML;
+    btn.innerHTML = '<span class="spinner"></span>';
+    btn.disabled = true;
+    try {
+      const res = await fetch(`/api/run/${name}`, { method: "POST" });
+      const data = await res.json();
+      if (data.success) {
+        toast(
+          `✓ ${name}: ${data.records_written} rows written in ${data.duration_s.toFixed(1)}s`,
+        );
+        setTimeout(() => location.reload(), 1200);
+      } else {
+        toast(`✗ ${name}: ${data.error}`, "error");
+      }
+    } catch (e) {
+      toast("Network error", "error");
     }
-  } catch(e) {
-    toast('Network error', 'error');
+    btn.innerHTML = orig;
+    btn.disabled = false;
   }
-  btn.innerHTML = orig;
-  btn.disabled = false;
-}
 </script>
+
+<!-- ── View YAML Modal ────────────────────────────────────────── -->
+<div
+  id="modal-view"
+  style="display: none"
+  onclick="if (event.target === this) closeModal('modal-view');"
+>
+  <div class="modal-box">
+    <div class="modal-header">
+      <span
+        id="modal-view-title"
+        style="font-family: var(--display); font-weight: 700"
+      ></span>
+      <button class="modal-close" onclick="closeModal('modal-view')">✕</button>
+    </div>
+    <pre id="modal-view-content" class="yaml-display"></pre>
+  </div>
+</div>
+
+<!-- ── Edit YAML Modal ────────────────────────────────────────── -->
+<div
+  id="modal-edit"
+  style="display: none"
+  onclick="if (event.target === this) closeModal('modal-edit');"
+>
+  <div class="modal-box">
+    <div class="modal-header">
+      <span
+        id="modal-edit-title"
+        style="font-family: var(--display); font-weight: 700"
+      ></span>
+      <button class="modal-close" onclick="closeModal('modal-edit')">✕</button>
+    </div>
+    <div
+      id="modal-edit-error"
+      style="
+        display: none;
+        margin-bottom: 12px;
+        padding: 8px 12px;
+        border-radius: 4px;
+        background: var(--red) 10;
+        border: 1px solid var(--red) 40;
+        color: var(--red);
+        font-size: 12px;
+      "
+    ></div>
+    <textarea
+      id="modal-edit-content"
+      rows="20"
+      style="width: 100%; margin-bottom: 14px"
+    ></textarea>
+    <div style="display: flex; gap: 10px">
+      <button class="btn btn-primary" onclick="saveYaml()">Save Changes</button>
+      <button class="btn btn-ghost" onclick="closeModal('modal-edit')">
+        Cancel
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Delete Confirm Modal ───────────────────────────────────── -->
+<div
+  id="modal-delete"
+  style="display: none"
+  onclick="if (event.target === this) closeModal('modal-delete');"
+>
+  <div class="modal-box" style="max-width: 420px">
+    <div class="modal-header">
+      <span
+        style="font-family: var(--display); font-weight: 700; color: var(--red)"
+        >Delete Source</span
+      >
+      <button class="modal-close" onclick="closeModal('modal-delete')">
+        ✕
+      </button>
+    </div>
+    <p style="color: var(--muted); font-size: 13px; margin-bottom: 6px">
+      Are you sure you want to delete
+      <strong id="modal-delete-name" style="color: var(--text)"></strong>?
+    </p>
+    <p style="color: var(--muted); font-size: 12px; margin-bottom: 20px">
+      This removes the YAML config file. Your collected data in the database is
+      <strong style="color: var(--text)">not</strong> deleted.
+    </p>
+    <div style="display: flex; gap: 10px">
+      <button class="btn btn-danger" onclick="deleteSource()">
+        Yes, Delete
+      </button>
+      <button class="btn btn-ghost" onclick="closeModal('modal-delete')">
+        Cancel
+      </button>
+    </div>
+  </div>
+</div>
+
+<style>
+  #modal-view,
+  #modal-edit,
+  #modal-delete {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(3px);
+    z-index: 500;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .modal-box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 28px;
+    width: 92%;
+    max-width: 860px;
+    max-height: 90vh;
+    overflow-y: auto;
+  }
+
+  .yaml-editor {
+  width: 100%;
+  min-height: 620px;
+
+  background: #11131d;
+  color: #f3f4f6;
+
+  border: 1px solid #2d3248;
+  border-radius: 10px;
+
+  padding: 22px 24px;
+
+  font-family: "JetBrains Mono", monospace;
+  font-size: 14px;
+  line-height: 2;
+
+  resize: vertical;
+  outline: none;
+
+  box-sizing: border-box;
+
+  letter-spacing: 0.2px;
+}
+
+.yaml-editor:focus {
+  border-color: #00d4aa;
+  box-shadow: 0 0 0 3px rgba(0, 212, 170, 0.12);
+}
+
+#modal-edit-title {
+  font-size: 20px;
+  letter-spacing: 0.3px;
+}
+
+.modal-header {
+  margin-bottom: 22px;
+}
+
+.modal-close {
+  font-size: 18px;
+  opacity: 0.7;
+}
+
+.modal-close:hover {
+  opacity: 1;
+}
+
+  
+  .modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+  }
+  .modal-close {
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-size: 16px;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 4px;
+  }
+  .modal-close:hover {
+    color: var(--text);
+    background: var(--surface2);
+  }
+  .yaml-display {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 16px;
+    font-family: var(--mono);
+    font-size: 12px;
+    line-height: 1.8;
+    color: var(--accent);
+    white-space: pre;
+    overflow-x: auto;
+    margin: 0;
+  }
+</style>
+
+<script>
+  let _editingSource = null;
+  let _deletingSource = null;
+
+  function openModal(id) {
+    document.getElementById(id).style.display = "flex";
+    document.body.style.overflow = "hidden";
+  }
+  function closeModal(id) {
+    document.getElementById(id).style.display = "none";
+    document.body.style.overflow = "";
+  }
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      ["modal-view", "modal-edit", "modal-delete"].forEach(closeModal);
+    }
+  });
+
+  // ── View YAML ──────────────────────────────────────────────────
+  async function viewYaml(name) {
+    try {
+      const res = await fetch("/api/source/" + name + "/yaml");
+      if (!res.ok) {
+        toast("Could not load config", "error");
+        return;
+      }
+      const data = await res.json();
+      document.getElementById("modal-view-title").textContent = name + ".yaml";
+      document.getElementById("modal-view-content").textContent = data.yaml;
+      openModal("modal-view");
+    } catch (e) {
+      toast("Network error", "error");
+    }
+  }
+
+  // ── Edit YAML ──────────────────────────────────────────────────
+  async function editYaml(name) {
+    try {
+      const res = await fetch("/api/source/" + name + "/yaml");
+      if (!res.ok) {
+        toast("Could not load config", "error");
+        return;
+      }
+      const data = await res.json();
+      _editingSource = name;
+      document.getElementById("modal-edit-title").textContent =
+        "Edit — " + name + ".yaml";
+      document.getElementById("modal-edit-content").value = data.yaml;
+      document.getElementById("modal-edit-error").style.display = "none";
+      openModal("modal-edit");
+    } catch (e) {
+      toast("Network error", "error");
+    }
+  }
+
+  async function saveYaml() {
+    const yaml = document.getElementById("modal-edit-content").value.trim();
+    const errBox = document.getElementById("modal-edit-error");
+    errBox.style.display = "none";
+    if (!yaml) {
+      errBox.textContent = "Config cannot be empty";
+      errBox.style.display = "block";
+      return;
+    }
+
+    const form = new FormData();
+    form.append("yaml_content", yaml);
+    try {
+      const res = await fetch("/api/source/" + _editingSource + "/yaml", {
+        method: "PUT",
+        body: form,
+      });
+      const data = await res.json();
+      if (res.ok) {
+        closeModal("modal-edit");
+        toast();
+        setTimeout(() => location.reload(), 1000);
+      } else {
+        errBox.textContent = data.detail || "Save failed";
+        errBox.style.display = "block";
+      }
+    } catch (e) {
+      errBox.textContent = "Network error";
+      errBox.style.display = "block";
+    }
+  }
+
+  // ── Delete ─────────────────────────────────────────────────────
+  function confirmDelete(name) {
+    _deletingSource = name;
+    document.getElementById("modal-delete-name").textContent = name;
+    openModal("modal-delete");
+  }
+
+  async function deleteSource() {
+    try {
+      const res = await fetch("/api/source/" + _deletingSource, {
+        method: "DELETE",
+      });
+      const data = await res.json();
+      if (res.ok) {
+        closeModal("modal-delete");
+        toast();
+        setTimeout(() => location.reload(), 1000);
+      } else {
+        toast(data.detail || "Delete failed", "error");
+      }
+    } catch (e) {
+      toast("Network error", "error");
+    }
+  }
+</script>
+
 {% endblock %}
