@@ -26,7 +26,39 @@ block content %}
   </div>
 </div>
 
-{% if sources %}
+{% if sources | selectattr("upsert_key", "none") | list %}
+<div
+  style="
+    background: var(--yellow) 10;
+    border: 1px solid var(--yellow) 40;
+    border-radius: 6px;
+    padding: 12px 18px;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+  "
+>
+  <span style="color: var(--yellow); font-size: 16px; margin-top: 1px">⚠</span>
+  <div>
+    <div
+      style="
+        color: var(--yellow);
+        font-weight: 700;
+        font-size: 12px;
+        margin-bottom: 3px;
+      "
+    >
+      Duplicate data risk
+    </div>
+    <div style="color: var(--muted); font-size: 12px">
+      One or more sources have no <code>upsert_key</code> set. Every scheduled
+      run will insert all records again, creating duplicates. Edit the config
+      and add <code>upsert_key: &lt;unique_field&gt;</code> to fix this.
+    </div>
+  </div>
+</div>
+{% endif %} {% if sources %}
 <div class="card">
   <table class="data-table">
     <thead>
@@ -54,6 +86,13 @@ block content %}
           >
             {{ s.name }}
           </a>
+          {% if not s.upsert_key %}
+          <span
+            class="badge badge-yellow"
+            title="No upsert_key set — repeated runs will insert duplicate rows"
+            >⚠ No dedup</span
+          >
+          {% endif %}
         </td>
         <td><code>{{ s.table_name }}</code></td>
         <td>
@@ -193,6 +232,33 @@ block content %}
         font-size: 12px;
       "
     ></div>
+    <div
+      id="modal-edit-warn"
+      style="
+        display: none;
+        margin-bottom: 12px;
+        padding: 8px 12px;
+        border-radius: 4px;
+        background: var(--yellow) 10;
+        border: 1px solid var(--yellow) 40;
+        color: var(--yellow);
+        font-size: 12px;
+      "
+    >
+      ⚠ No
+      <code style="background: var(--yellow) 15; color: var(--yellow)"
+        >upsert_key</code
+      >
+      found — repeated runs will insert duplicate rows. Add
+      <code style="background: var(--yellow) 15; color: var(--yellow)"
+        >upsert_key: your_id_field</code
+      >
+      under
+      <code style="background: var(--yellow) 15; color: var(--yellow)"
+        >storage:</code
+      >
+      to enable deduplication.
+    </div>
     <textarea
       id="modal-edit-content"
       rows="20"
@@ -267,53 +333,52 @@ block content %}
   }
 
   .yaml-editor {
-  width: 100%;
-  min-height: 620px;
+    width: 100%;
+    min-height: 620px;
 
-  background: #11131d;
-  color: #f3f4f6;
+    background: #11131d;
+    color: #f3f4f6;
 
-  border: 1px solid #2d3248;
-  border-radius: 10px;
+    border: 1px solid #2d3248;
+    border-radius: 10px;
 
-  padding: 22px 24px;
+    padding: 22px 24px;
 
-  font-family: "JetBrains Mono", monospace;
-  font-size: 14px;
-  line-height: 2;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 14px;
+    line-height: 2;
 
-  resize: vertical;
-  outline: none;
+    resize: vertical;
+    outline: none;
 
-  box-sizing: border-box;
+    box-sizing: border-box;
 
-  letter-spacing: 0.2px;
-}
+    letter-spacing: 0.2px;
+  }
 
-.yaml-editor:focus {
-  border-color: #00d4aa;
-  box-shadow: 0 0 0 3px rgba(0, 212, 170, 0.12);
-}
+  .yaml-editor:focus {
+    border-color: #00d4aa;
+    box-shadow: 0 0 0 3px rgba(0, 212, 170, 0.12);
+  }
 
-#modal-edit-title {
-  font-size: 20px;
-  letter-spacing: 0.3px;
-}
+  #modal-edit-title {
+    font-size: 20px;
+    letter-spacing: 0.3px;
+  }
 
-.modal-header {
-  margin-bottom: 22px;
-}
+  .modal-header {
+    margin-bottom: 22px;
+  }
 
-.modal-close {
-  font-size: 18px;
-  opacity: 0.7;
-}
+  .modal-close {
+    font-size: 18px;
+    opacity: 0.7;
+  }
 
-.modal-close:hover {
-  opacity: 1;
-}
+  .modal-close:hover {
+    opacity: 1;
+  }
 
-  
   .modal-header {
     display: flex;
     justify-content: space-between;
@@ -397,6 +462,13 @@ block content %}
         "Edit — " + name + ".yaml";
       document.getElementById("modal-edit-content").value = data.yaml;
       document.getElementById("modal-edit-error").style.display = "none";
+      // Warn if upsert_key is missing from the YAML
+      const warnBox = document.getElementById("modal-edit-warn");
+      if (!data.content.includes("upsert_key")) {
+        warnBox.style.display = "block";
+      } else {
+        warnBox.style.display = "none";
+      }
       openModal("modal-edit");
     } catch (e) {
       toast("Network error", "error");
@@ -411,6 +483,15 @@ block content %}
       errBox.textContent = "Config cannot be empty";
       errBox.style.display = "block";
       return;
+    }
+    // Warn before saving if upsert_key is still missing
+    if (!yaml.includes("upsert_key")) {
+      if (
+        !confirm(
+          "No upsert_key set — repeated scheduled runs will create duplicate rows.\nSave anyway?",
+        )
+      )
+        return;
     }
 
     const form = new FormData();

@@ -100,6 +100,7 @@ async def dashboard(request: Request):
                 "last_success": s.get("last_success", None),
                 "run_count": s.get("run_count", 0),
                 "last_error": s.get("last_error"),
+                "upsert_key": cfg.storage.upsert_key,
             }
         )
     return _render(

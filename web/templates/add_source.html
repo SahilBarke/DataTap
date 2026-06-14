@@ -46,6 +46,33 @@ block content %}
         margin-bottom: 16px;
       "
     ></div>
+    <div
+      id="dedup-warn"
+      style="
+        display: none;
+        margin-bottom: 12px;
+        padding: 10px 14px;
+        border-radius: 4px;
+        background: var(--yellow) 10;
+        border: 1px solid var(--yellow) 40;
+        color: var(--yellow);
+        font-size: 12px;
+      "
+    >
+      ⚠ No
+      <code style="background: var(--yellow) 15; color: var(--yellow)"
+        >upsert_key</code
+      >
+      set under
+      <code style="background: var(--yellow) 15; color: var(--yellow)"
+        >storage:</code
+      >
+      — every scheduled run will re-insert all records, creating duplicates. Add
+      <code style="background: var(--yellow) 15; color: var(--yellow)"
+        >upsert_key: id</code
+      >
+      (or whichever unique field the API returns).
+    </div>
     <textarea
       id="yaml-input"
       rows="28"
@@ -197,6 +224,14 @@ transform:
       errBox.style.display = "block";
       return;
     }
+    if (!yaml.includes("upsert_key")) {
+      if (
+        !confirm(
+          "No upsert_key set — repeated scheduled runs will create duplicate rows.\nSave anyway?",
+        )
+      )
+        return;
+    }
 
     const form = new FormData();
     form.append("yaml_content", yaml);
@@ -220,5 +255,15 @@ transform:
       errBox.style.display = "block";
     }
   }
+  // Live upsert_key check as user types
+  const yamlInput = document.getElementById("yaml-input");
+  const dedupWarn = document.getElementById("dedup-warn");
+  function checkUpsertKey() {
+    const val = yamlInput.value;
+    dedupWarn.style.display =
+      val.length > 20 && !val.includes("upsert_key") ? "block" : "none";
+  }
+  yamlInput.addEventListener("input", checkUpsertKey);
+  checkUpsertKey(); // run on load for pre-filled examples
 </script>
 {% endblock %}
